@@ -24,6 +24,9 @@
 
 ## ✨ Features
 
+### Living, animated space
+- **Dynamic parallax starfield** — multiple depth layers of stars scroll at different speeds, brighter stars twinkle, a soft nebula drifts behind everything, and shooting stars streak past. It's generated in code (no static image) and animates on every screen, including the menus. Costs ~0.6 ms/frame, so it's effectively free.
+
 ### Procedurally generated ships
 - **Every ship is drawn from scratch in code** — no reused sprite art. Each enemy archetype has its own silhouette, and each individual enemy gets small random colour/detail variation, so a wave never looks copy-pasted.
 - **Your ship visibly upgrades** with its weapon level — more engines, wings, and cannons appear as you power up.
@@ -121,7 +124,7 @@ python main.py
 
 ## ✅ Testing
 
-The game logic is covered by a **39-test pytest suite** that runs fully
+The game logic is covered by a **43-test pytest suite** that runs fully
 headless (no window or audio needed), plus a boot smoke test — all wired into
 **GitHub Actions CI** across Python 3.9 / 3.11 / 3.12.
 
@@ -147,6 +150,7 @@ space-invaders-pygame/
 │   ├── settings.py       # All tuning constants & colors (balance in one place)
 │   ├── assets.py         # Fault-tolerant image / sound / font loading
 │   ├── sprites.py        # Procedural ship generation (all art drawn in code)
+│   ├── background.py     # Animated parallax starfield + nebula
 │   ├── savegame.py       # JSON save / continue + high-score persistence
 │   ├── entities.py       # Player, Enemy, Boss, Bullet, PowerUp, Explosion
 │   ├── ui.py             # Keyboard-navigable menus, HUD, overlays

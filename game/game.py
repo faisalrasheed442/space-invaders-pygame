@@ -9,6 +9,7 @@ import random
 import pygame
 
 from game import assets, settings as cfg, savegame, sprites, ui
+from game.background import Background
 from game.entities import Boss, Bullet, Enemy, Explosion, Player, PowerUp
 
 
@@ -41,8 +42,8 @@ class Game:
                                for kind in cfg.ENEMY_KINDS}
         self.boss_images = {kind: sprites.make_boss(kind) for kind in cfg.BOSS_SPECS}
 
-        # --- other assets ---
-        self.bg = assets.load_image("bg.jpg", (cfg.WIDTH, cfg.HEIGHT))
+        # --- animated background + audio ---
+        self.background = Background()
         self.fire_sound = assets.load_sound("fire.wav")
         self.hit_sound = assets.load_sound("hit.wav")
         self._music_ok = assets.load_music("bgg.mp3")
@@ -474,7 +475,8 @@ class Game:
     # Rendering
     # ------------------------------------------------------------------ #
     def draw(self, dt: float) -> None:
-        self.win.blit(self.bg, (0, 0))
+        self.background.update(dt)      # animate in every state (menu included)
+        self.background.draw(self.win)
         if self.state == MENU:
             self._draw_menu()
         else:
