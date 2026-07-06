@@ -27,6 +27,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
+          # This repo uses Requirements.txt (capital R); point the pip cache at
+          # the real files so the case-sensitive Linux runner finds them.
+          cache-dependency-path: |
+            Requirements.txt
+            requirements-dev.txt
 
       - name: Install dependencies
         run: |
