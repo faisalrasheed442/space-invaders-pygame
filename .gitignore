@@ -17,6 +17,7 @@ ENV/
 
 # --- Game runtime files ---
 highscore.txt
+savegame.json
 
 # --- IDE / editor ---
 .idea/

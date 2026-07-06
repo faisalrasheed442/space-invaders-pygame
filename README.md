@@ -1,8 +1,9 @@
 <h1 align="center">🚀 Space Adventure</h1>
 
 <p align="center">
-  A fast, polished arcade shooter built from scratch in <b>Python</b> with <b>pygame</b>.<br>
-  Fly your ship, clear escalating waves of enemies, and chase the high score.
+  A complete arcade shooter built from scratch in <b>Python</b> with <b>pygame</b>.<br>
+  Endless waves of enemies that <b>shoot and dive at you</b>, <b>boss fights</b>,
+  <b>power-up rewards</b>, and a full <b>menu &amp; save system</b>.
 </p>
 
 <p align="center">
@@ -13,32 +14,54 @@
 </p>
 
 <p align="center">
-  <img src="pic/screenshot.png" alt="Space Adventure gameplay" width="80%">
+  <img src="pic/boss.png" alt="Space Adventure boss fight" width="80%">
 </p>
+
+<p align="center"><i>Boss fight — health bar, radial bullet spread, and falling power-ups.</i></p>
 
 ---
 
 ## ✨ Features
 
-- **Smooth 60 FPS, frame-rate independent** — all movement is scaled by delta time, so the game plays identically on any hardware (no more "too fast on a fast PC").
-- **Wave-based progression** — each wave spawns more enemies that move faster and take more hits.
-- **Lives & scoring** — start with 3 lives, earn points per hit and bonus points per kill, with a **persistent high score** saved between sessions.
-- **Responsive controls** — Arrow keys *or* WASD, with animated ship thrust.
-- **Health bars, HUD & lives display** — clear at-a-glance game state.
-- **Full game loop** — start screen, pause, game-over, and instant restart.
-- **Robust & crash-resistant** — missing images or an unavailable audio device degrade gracefully instead of crashing; the game still runs on headless machines.
-- **Zero-freeze design** — no blocking sleeps anywhere in the loop; hit feedback uses a non-blocking invulnerability timer.
+### Combat that fights back
+- **Enemies attack you** — "shooter" enemies fire aimed bullets downward.
+- **Dive-bombers** — enemies break formation and dive straight at your position.
+- **Descending formation** — the whole wave drifts down over time and drops on the edges, so standing still is never safe.
+- **Boss fights every 5th wave** — a heavy boss with its own health bar, cycling attack patterns (radial spread, aimed burst) and minion spawns.
+
+### Rewards & progression
+- **Power-up drops** from kills — 🔶 Rapid Fire, 🔷 Multi-Shot, 🛡️ Shield, ➕ Extra Life, 💣 Screen Bomb, 💲 Score Bonus.
+- **Endless escalating waves** — more enemies, faster movement, tougher types, and higher-tier bosses the deeper you go.
+- **Scoring & high score** — points per hit, per kill, and per wave cleared, with a **persistent high score**.
+
+### A full game, not a demo
+- **Main menu** — New Game · **Continue** (resume a saved run) · Quit.
+- **Pause menu** — Resume · **Save &amp; Quit** · Quit.
+- **Game Over screen** with Play Again / Main Menu / Quit.
+- **Save system** — persist your run to disk and continue later.
+
+### Built to be solid
+- **Smooth 60 FPS, frame-rate independent** — movement scales by delta time, identical on any hardware.
+- **Crash-resistant** — missing images or no audio device degrade gracefully; runs headless (CI/servers).
+- **Zero-freeze design** — no blocking sleeps anywhere; hit feedback uses a non-blocking invulnerability timer.
+- **Clean, modular codebase** — logically separated package (see below).
+
+<p align="center">
+  <img src="pic/screenshot.png" alt="Wave gameplay" width="49%">
+  <img src="pic/menu.png" alt="Main menu" width="49%">
+</p>
 
 ## 🎮 Controls
 
-| Action        | Keys                         |
-| ------------- | ---------------------------- |
-| Move          | `← ↑ ↓ →` or `W A S D`       |
-| Fire          | `Space`                      |
-| Pause / Resume| `P`                          |
-| Mute / Unmute | `M`                          |
-| Start / Restart | `Enter`                    |
-| Quit          | `Esc` or `Q`                 |
+| Action           | Keys                     |
+| ---------------- | ------------------------ |
+| Move             | `← ↑ ↓ →` or `W A S D`   |
+| Fire             | `Space`                  |
+| Pause menu       | `P` or `Esc`             |
+| Navigate menus   | `↑` / `↓`                |
+| Select           | `Enter` / `Space`        |
+| Mute / Unmute    | `M`                      |
+| Quit             | `Q`                      |
 
 ## 🛠️ Getting Started
 
@@ -64,38 +87,41 @@ pip install -r Requirements.txt
 python main.py
 ```
 
-## 🧩 How It Works
+## 🧩 Architecture
 
-The game is a single, well-structured module organized around a small object model:
-
-| Component | Responsibility |
-| --------- | -------------- |
-| `Game`    | Owns the main loop, state machine (`start → playing → paused → over`), input, collision, HUD and rendering. |
-| `Player`  | Movement, screen clamping, thrust animation, and invulnerability frames after a hit. |
-| `Enemy`   | Horizontal patrol with descent-on-bounce, health, and a health bar. |
-| `Bullet`  | Lightweight projectile (`__slots__`) with upward motion and off-screen culling. |
-| `AnimatedSprite` | Shared, time-based frame animation used by the ship and enemies. |
-
-**Design highlights**
-
-- **Delta-time movement** (`speed × dt`) keeps gameplay consistent regardless of frame rate, and `dt` is clamped to prevent "tunneling" through collisions after a stall.
-- **Fault-tolerant asset loading** — every image and sound is loaded through a helper that returns a safe placeholder / silent stub if a file or audio device is missing.
-- **Safe iteration** — bullets and enemies are culled by iterating over copies of their lists, avoiding the classic mutate-while-iterating bug.
-- **Cross-platform paths** via `pathlib`, so it runs the same on Windows, macOS, and Linux.
-
-## 📁 Project Structure
+The game is organized as a small, readable package — each module has a single
+responsibility:
 
 ```
 space-invaders-pygame/
-├── main.py            # Complete game (entry point)
-├── Requirements.txt   # Python dependencies
-├── pic/               # Sprites, background, audio
-│   ├── s1..s9.png     #   ship animation frames
-│   ├── e1..e9.png     #   enemy animation frames
-│   ├── bg.jpg         #   background
-│   └── *.wav / *.mp3  #   sound effects & music
+├── main.py               # Thin entry point
+├── game/
+│   ├── settings.py       # All tuning constants & colors (balance in one place)
+│   ├── assets.py         # Fault-tolerant image / sound / font loading
+│   ├── savegame.py       # JSON save / continue + high-score persistence
+│   ├── entities.py       # Player, Enemy, Boss, Bullet, PowerUp, Explosion
+│   ├── ui.py             # Keyboard-navigable menus, HUD, overlays
+│   └── game.py           # State machine, waves, combat, collisions
+├── pic/                  # Sprites, background, audio
+├── Requirements.txt
 └── README.md
 ```
+
+**Design highlights**
+
+- **Finite state machine** — `menu → playing → paused → game_over`, each with its own input and rendering path.
+- **Delta-time movement** (`speed × dt`), with `dt` clamped to avoid collision "tunneling" after a stall.
+- **Data-driven design** — enemy archetypes, power-up drop weights, and all balancing live in `settings.py`.
+- **Fault-tolerant loading** — a helper returns a safe placeholder surface / silent sound stub whenever an asset or the audio device is unavailable.
+- **Safe iteration** — bullets, enemies, and power-ups are culled over list copies to avoid mutate-while-iterating bugs.
+- **Cross-platform paths** via `pathlib`, so it behaves identically on Windows, macOS, and Linux.
+
+## 🗺️ Gameplay Loop
+
+1. Clear a wave of enemies to earn a **wave-clear bonus** and advance.
+2. Every **5th wave** is a **boss fight** — survive its patterns and destroy it for a big score and a guaranteed reward.
+3. Collect **power-ups** to stack Rapid Fire, Multi-Shot, and Shields.
+4. Lose all your lives and it's **Game Over** — beat your **high score** and try again.
 
 ## 📄 License
 
