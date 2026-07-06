@@ -41,7 +41,10 @@ class Game:
             kind: assets.load_frames("e", 9, cfg.ENEMY_SIZE, spec["tint"])
             for kind, spec in cfg.ENEMY_KINDS.items()
         }
-        self.boss_image = assets.load_image("e1.png", cfg.BOSS_SIZE, tint=(180, 70, 210))
+        self.boss_images = {
+            kind: assets.load_image("e1.png", cfg.BOSS_SIZE, tint=spec["tint"])
+            for kind, spec in cfg.BOSS_SPECS.items()
+        }
         self.fire_sound = assets.load_sound("fire.wav")
         self.hit_sound = assets.load_sound("hit.wav")
         self._music_ok = assets.load_music("bgg.mp3")
@@ -111,6 +114,8 @@ class Game:
         self.wave = max(0, int(data.get("wave", 1)) - 1)  # _next_wave increments
         self.state = PLAYING
         self._next_wave()
+        self.player.weapon_level = max(1, min(cfg.MAX_WEAPON_LEVEL,
+                                              int(data.get("weapon", 1))))
         self._play_music()
 
     def _next_wave(self) -> None:
@@ -122,7 +127,8 @@ class Game:
 
         if self.wave % cfg.BOSS_EVERY == 0:
             tier = self.wave // cfg.BOSS_EVERY
-            self.boss = Boss(self.boss_image, tier)
+            kind = cfg.BOSS_KINDS[(tier - 1) % len(cfg.BOSS_KINDS)]
+            self.boss = Boss(self.boss_images[kind], tier, kind)
             return
 
         count = min(6 + self.wave * 2, 24)
@@ -149,6 +155,10 @@ class Game:
             pool += ["diver"]
         if self.wave >= 4:
             pool += ["shooter", "diver"]
+        if self.wave >= 6:
+            pool += ["tank"]          # tough enemies join the deeper waves
+        if self.wave >= 9:
+            pool += ["tank", "diver"]
         return random.choice(pool)
 
     # ------------------------------------------------------------------ #
@@ -236,7 +246,8 @@ class Game:
 
     def _save_and_menu(self) -> None:
         savegame.save_game({"score": self.score, "wave": self.wave,
-                            "lives": self.lives, "high": self.high_score})
+                            "lives": self.lives, "high": self.high_score,
+                            "weapon": self.player.weapon_level})
         self._to_menu()
 
     def _to_menu(self) -> None:
@@ -351,7 +362,7 @@ class Game:
             hit = False
             for e in self.enemies[:]:
                 if e.rect.colliderect(b.rect):
-                    e.take_damage()
+                    e.take_damage(b.damage)
                     self._sfx(self.hit_sound)
                     self.score += 1
                     hit = True
@@ -362,7 +373,7 @@ class Game:
                 self.player_bullets.remove(b)
                 continue
             if self.boss and self.boss.rect.colliderect(b.rect):
-                self.boss.take_damage()
+                self.boss.take_damage(b.damage)
                 self._sfx(self.hit_sound)
                 self.score += 1
                 self.player_bullets.remove(b)
@@ -431,7 +442,7 @@ class Game:
             self._game_over()
 
     def _collect(self, kind: str) -> None:
-        if kind in ("rapid", "multi", "shield"):
+        if kind in ("rapid", "multi", "shield", "upgrade"):
             self.player.apply(kind)
         elif kind == "life":
             self.lives = min(cfg.MAX_LIVES, self.lives + 1)
@@ -489,6 +500,8 @@ class Game:
             e.draw(self.win, dt)
         if self.boss:
             self.boss.draw(self.win)
+            ui.draw_center_text(self.win, self.boss.name, self.f_tiny,
+                                cfg.WHITE, cfg.WIDTH // 2, 46)
         for p in self.powerups:
             p.draw(self.win, self.f_tiny)
         for b in self.enemy_bullets:

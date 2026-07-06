@@ -61,9 +61,13 @@ def draw_hud(win, fonts, player, score, wave, lives, high_score, ship_icon, mute
     for i in range(lives):
         win.blit(ship_icon, (cfg.WIDTH - 40 - i * 34, 82))
 
+    # Weapon level.
+    wl = small.render(f"Weapon Lv {player.weapon_level}", True, cfg.ORANGE)
+    win.blit(wl, (16, 84))
+
     # Active power-up timers.
     x = 16
-    y = 84
+    y = 118
     for label, t, color in (
         ("RAPID", player.rapid_t, cfg.ORANGE),
         ("MULTI", player.multi_t, cfg.CYAN),

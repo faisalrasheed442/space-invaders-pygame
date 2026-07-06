@@ -7,6 +7,7 @@
 </p>
 
 <p align="center">
+  <img alt="CI" src="https://github.com/faisalrasheed442/space-invaders-pygame/actions/workflows/ci.yml/badge.svg">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white">
   <img alt="pygame" src="https://img.shields.io/badge/pygame-2.5%2B-1B9E4B">
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational">
@@ -24,15 +25,37 @@
 ## ✨ Features
 
 ### Combat that fights back
-- **Enemies attack you** — "shooter" enemies fire aimed bullets downward.
+- **Enemies attack you** — "shooter" and "tank" enemies fire aimed bullets downward.
 - **Dive-bombers** — enemies break formation and dive straight at your position.
 - **Descending formation** — the whole wave drifts down over time and drops on the edges, so standing still is never safe.
-- **Boss fights every 5th wave** — a heavy boss with its own health bar, cycling attack patterns (radial spread, aimed burst) and minion spawns.
+- **4 boss types**, one every 5th wave — each with its own colour, attack rotation, and health that scales with tier (see below).
 
-### Rewards & progression
-- **Power-up drops** from kills — 🔶 Rapid Fire, 🔷 Multi-Shot, 🛡️ Shield, ➕ Extra Life, 💣 Screen Bomb, 💲 Score Bonus.
-- **Endless escalating waves** — more enemies, faster movement, tougher types, and higher-tier bosses the deeper you go.
+### Upgrade your ship
+- **Weapon-upgrade system** — collect `^` upgrades to level up your guns: single → double → triple → heavy → 5-way spread. At high levels each bullet also deals **double damage**.
+- **Risk & reward** — taking a hit knocks your weapon down a level, so upgrades are worth protecting.
+- **Power-up drops** from kills — 🔶 Rapid Fire, 🔷 Multi-Shot, 🛡️ Shield, ➕ Extra Life, 💣 Screen Bomb, 💲 Score Bonus, ⬆️ Weapon Upgrade.
+
+### Progression
+- **Endless escalating waves** — more enemies, faster movement, tougher types (tanks join deeper waves), and higher-tier bosses the further you go.
 - **Scoring & high score** — points per hit, per kill, and per wave cleared, with a **persistent high score**.
+
+### Enemy types
+
+| Enemy | Behaviour |
+| ----- | --------- |
+| **Grunt** | Basic formation fodder. |
+| **Shooter** | Fires aimed bullets down at you. |
+| **Diver** | Breaks formation and dive-bombs your position. |
+| **Tank** | Heavy armour, high value — shows up in deeper waves. |
+
+### Boss types
+
+| Boss | Signature attacks |
+| ---- | ----------------- |
+| **The Warlord** | Radial spread + aimed 3-round bursts. |
+| **The Spreader** | Curtain of rain fire + radial spread. |
+| **The Summoner** | Aimed bursts and relentless minion spawns. |
+| **The Overlord** | Rotating spiral fire, spread, and aimed bursts. |
 
 ### A full game, not a demo
 - **Main menu** — New Game · **Continue** (resume a saved run) · Quit.
@@ -87,6 +110,21 @@ pip install -r Requirements.txt
 python main.py
 ```
 
+## ✅ Testing
+
+The game logic is covered by a **32-test pytest suite** that runs fully
+headless (no window or audio needed), plus a boot smoke test — all wired into
+**GitHub Actions CI** across Python 3.9 / 3.11 / 3.12.
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+The suite covers weapon upgrades, all four boss types attacking, enemy fire and
+dives, every power-up effect, wave progression, collisions, and the full
+save / continue / game-over lifecycle.
+
 ## 🧩 Architecture
 
 The game is organized as a small, readable package — each module has a single
@@ -102,8 +140,11 @@ space-invaders-pygame/
 │   ├── entities.py       # Player, Enemy, Boss, Bullet, PowerUp, Explosion
 │   ├── ui.py             # Keyboard-navigable menus, HUD, overlays
 │   └── game.py           # State machine, waves, combat, collisions
+├── tests/                # Headless pytest suite
+├── .github/workflows/    # CI (pytest on 3.9 / 3.11 / 3.12)
 ├── pic/                  # Sprites, background, audio
-├── Requirements.txt
+├── Requirements.txt      # Runtime deps
+├── requirements-dev.txt  # + test deps
 └── README.md
 ```
 

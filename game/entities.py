@@ -38,9 +38,9 @@ class AnimatedSprite:
 # Bullets
 # --------------------------------------------------------------------------- #
 class Bullet:
-    __slots__ = ("x", "y", "vx", "vy", "radius", "color", "friendly")
+    __slots__ = ("x", "y", "vx", "vy", "radius", "color", "friendly", "damage")
 
-    def __init__(self, x, y, vy, color, radius, friendly, vx=0.0):
+    def __init__(self, x, y, vy, color, radius, friendly, vx=0.0, damage=1):
         self.x = float(x)
         self.y = float(y)
         self.vx = float(vx)
@@ -48,6 +48,7 @@ class Bullet:
         self.radius = radius
         self.color = color
         self.friendly = friendly
+        self.damage = damage
 
     @property
     def rect(self) -> pygame.Rect:
@@ -69,10 +70,22 @@ class Bullet:
 # --------------------------------------------------------------------------- #
 # Player
 # --------------------------------------------------------------------------- #
+# Bullet streams per effective weapon level: (x_offset, angle_velocity).
+# Higher levels add more streams and wider spread.
+WEAPON_STREAMS = {
+    1: [(0, 0.0)],
+    2: [(-16, 0.0), (16, 0.0)],
+    3: [(0, 0.0), (-18, -1.0), (18, 1.0)],
+    4: [(-16, 0.0), (16, 0.0), (-26, -1.0), (26, 1.0)],
+    5: [(0, 0.0), (-16, 0.0), (16, 0.0), (-30, -1.4), (30, 1.4)],
+}
+
+
 class Player(AnimatedSprite):
     def __init__(self, frames: list[pygame.Surface]):
         super().__init__(frames)
         self.width, self.height = frames[0].get_size()
+        self.weapon_level = 1
         self.reset()
 
     def reset(self) -> None:
@@ -84,6 +97,7 @@ class Player(AnimatedSprite):
         self.rapid_t = 0.0
         self.multi_t = 0.0
         self.shield_t = 0.0
+        self.weapon_level = 1
 
     @property
     def rect(self) -> pygame.Rect:
@@ -100,6 +114,8 @@ class Player(AnimatedSprite):
 
     def hit(self) -> None:
         self.invuln = cfg.INVULN_TIME
+        # Losing a life knocks the weapon down a level (never below 1).
+        self.weapon_level = max(1, self.weapon_level - 1)
 
     def apply(self, kind: str) -> None:
         if kind == "rapid":
@@ -108,22 +124,31 @@ class Player(AnimatedSprite):
             self.multi_t = cfg.POWERUP_DURATION
         elif kind == "shield":
             self.shield_t = cfg.POWERUP_DURATION
+        elif kind == "upgrade":
+            self.weapon_level = min(cfg.MAX_WEAPON_LEVEL, self.weapon_level + 1)
 
     def can_fire(self) -> bool:
         return self._cooldown <= 0
 
+    @property
+    def effective_level(self) -> int:
+        """Weapon level plus a temporary Multi-Shot boost."""
+        boost = 1 if self.multi_t > 0 else 0
+        return min(cfg.MAX_WEAPON_LEVEL, self.weapon_level + boost)
+
     def fire(self) -> list[Bullet]:
-        cooldown = cfg.RAPID_FIRE_COOLDOWN if self.rapid_t > 0 else cfg.PLAYER_FIRE_COOLDOWN
-        self._cooldown = cooldown
+        self._cooldown = cfg.RAPID_FIRE_COOLDOWN if self.rapid_t > 0 else cfg.PLAYER_FIRE_COOLDOWN
         gx, gy = self.gun
         speed = cfg.PLAYER_BULLET_SPEED
-        if self.multi_t > 0:
-            return [
-                Bullet(gx, gy, -speed, cfg.YELLOW, cfg.PLAYER_BULLET_RADIUS, True),
-                Bullet(gx, gy, -speed, cfg.YELLOW, cfg.PLAYER_BULLET_RADIUS, True, vx=-cfg.MULTISHOT_SPREAD),
-                Bullet(gx, gy, -speed, cfg.YELLOW, cfg.PLAYER_BULLET_RADIUS, True, vx=cfg.MULTISHOT_SPREAD),
-            ]
-        return [Bullet(gx, gy, -speed, cfg.YELLOW, cfg.PLAYER_BULLET_RADIUS, True)]
+        level = self.effective_level
+        damage = 2 if self.weapon_level >= cfg.WEAPON_HEAVY_LEVEL else 1
+        radius = cfg.PLAYER_BULLET_RADIUS + (1 if damage > 1 else 0)
+        color = cfg.ORANGE if damage > 1 else cfg.YELLOW
+        bullets = []
+        for x_off, ang in WEAPON_STREAMS[level]:
+            bullets.append(Bullet(gx + x_off, gy, -speed, color, radius, True,
+                                  vx=ang * cfg.MULTISHOT_SPREAD, damage=damage))
+        return bullets
 
     def update(self, dt: float, keys) -> None:
         moving = False
@@ -242,19 +267,25 @@ class Enemy(AnimatedSprite):
 # Boss
 # --------------------------------------------------------------------------- #
 class Boss:
-    def __init__(self, image: pygame.Surface, tier: int):
+    def __init__(self, image: pygame.Surface, tier: int, kind: str):
+        spec = cfg.BOSS_SPECS[kind]
         self.image = image
+        self.kind = kind
+        self.name = spec["name"]
+        self.patterns = spec["patterns"]
         self.width, self.height = image.get_size()
         self.x = float(cfg.WIDTH // 2 - self.width // 2)
         self.y = 60.0
         self.base_y = self.y
         self.max_health = cfg.BOSS_HEALTH_BASE + cfg.BOSS_HEALTH_PER_TIER * (tier - 1)
         self.health = self.max_health
-        self.points = cfg.BOSS_POINTS
+        self.points = cfg.BOSS_POINTS * tier
         self._t = 0.0
         self._attack_timer = cfg.BOSS_ATTACK_INTERVAL
-        self._spawn_timer = cfg.BOSS_SPAWN_INTERVAL
-        self._pattern = 0
+        self._spawn_timer = cfg.BOSS_SPAWN_INTERVAL * spec["spawn_mult"]
+        self._spawn_interval = cfg.BOSS_SPAWN_INTERVAL * spec["spawn_mult"]
+        self._pattern_idx = 0
+        self._spiral = 0.0
 
     @property
     def rect(self) -> pygame.Rect:
@@ -280,31 +311,43 @@ class Boss:
 
     def do_attack(self, player_pos) -> list[Bullet]:
         self._attack_timer = cfg.BOSS_ATTACK_INTERVAL
-        self._pattern = (self._pattern + 1) % 2
+        pattern = self.patterns[self._pattern_idx % len(self.patterns)]
+        self._pattern_idx += 1
+        speed = cfg.ENEMY_BULLET_SPEED
         cx = self.x + self.width / 2
         cy = self.y + self.height
         bullets: list[Bullet] = []
-        if self._pattern == 0:
-            # radial spread
+
+        if pattern == "spread":
             for angle in range(-60, 61, 20):
                 rad = math.radians(angle)
-                bullets.append(Bullet(cx, cy, cfg.ENEMY_BULLET_SPEED * math.cos(rad),
-                                      cfg.PURPLE, cfg.ENEMY_BULLET_RADIUS, False,
-                                      vx=cfg.ENEMY_BULLET_SPEED * math.sin(rad)))
-        else:
-            # aimed 3-round burst at the player
+                bullets.append(Bullet(cx, cy, speed * math.cos(rad), cfg.PURPLE,
+                                      cfg.ENEMY_BULLET_RADIUS, False, vx=speed * math.sin(rad)))
+        elif pattern == "aimed":
             px, py = player_pos
             dx, dy = px - cx, max(1.0, py - cy)
             dist = math.hypot(dx, dy)
             for spread in (-0.15, 0.0, 0.15):
-                bullets.append(Bullet(cx, cy, cfg.ENEMY_BULLET_SPEED * dy / dist,
-                                      cfg.RED, cfg.ENEMY_BULLET_RADIUS, False,
-                                      vx=cfg.ENEMY_BULLET_SPEED * (dx / dist + spread)))
+                bullets.append(Bullet(cx, cy, speed * dy / dist, cfg.RED,
+                                      cfg.ENEMY_BULLET_RADIUS, False,
+                                      vx=speed * (dx / dist + spread)))
+        elif pattern == "rain":
+            for i in range(7):
+                x = self.width / 6 * i + self.x
+                bullets.append(Bullet(x, cy, speed * 0.9, cfg.BLUE,
+                                      cfg.ENEMY_BULLET_RADIUS, False))
+        elif pattern == "spiral":
+            self._spiral += 0.6
+            for k in range(6):
+                rad = self._spiral + k * (math.pi / 3)
+                bullets.append(Bullet(cx, cy, speed * math.cos(rad) * 0.7 + speed * 0.4,
+                                      cfg.ORANGE, cfg.ENEMY_BULLET_RADIUS, False,
+                                      vx=speed * math.sin(rad)))
         return bullets
 
     def ready_spawn(self) -> bool:
         if self._spawn_timer <= 0:
-            self._spawn_timer = cfg.BOSS_SPAWN_INTERVAL
+            self._spawn_timer = self._spawn_interval
             return True
         return False
 
