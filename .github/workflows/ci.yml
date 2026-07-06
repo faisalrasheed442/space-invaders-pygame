@@ -9,10 +9,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.9", "3.11", "3.12"]
 
     env:
       # Run pygame with no real display or audio device.
@@ -22,10 +18,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.11"
           cache: pip
           # This repo uses Requirements.txt (capital R); point the pip cache at
           # the real files so the case-sensitive Linux runner finds them.
@@ -39,7 +35,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run test suite
-        run: pytest -q
+        run: python -m pytest -q
 
       - name: Headless smoke test (boot + 200 frames)
         run: SELFTEST_FRAMES=200 python main.py

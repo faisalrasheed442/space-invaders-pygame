@@ -149,7 +149,7 @@ automatically by CI — pushing a version tag (e.g. `git tag v1.0.0 && git push
 
 The game logic is covered by a **43-test pytest suite** that runs fully
 headless (no window or audio needed), plus a boot smoke test — all wired into
-**GitHub Actions CI** across Python 3.9 / 3.11 / 3.12.
+**GitHub Actions CI** on Python 3.11.
 
 ```bash
 pip install -r requirements-dev.txt
