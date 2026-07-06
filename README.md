@@ -15,6 +15,10 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/faisalrasheed442/space-invaders-pygame/releases/latest"><b>⬇️ Download the Windows game (.exe)</b></a>
+</p>
+
+<p align="center">
   <img src="pic/boss.png" alt="Space Adventure boss fight" width="80%">
 </p>
 
@@ -122,6 +126,25 @@ pip install -r Requirements.txt
 python main.py
 ```
 
+### Download the standalone game (no Python needed)
+
+Prebuilt Windows executables are published on the
+[**Releases**](https://github.com/faisalrasheed442/space-invaders-pygame/releases/latest)
+page — download `SpaceAdventure.exe` and double-click to play.
+
+### Build your own executable
+
+```bash
+pip install pyinstaller
+# Windows (note the ';' between source and dest):
+pyinstaller --onefile --windowed --name SpaceAdventure --add-data "pic;pic" main.py
+# macOS / Linux use ':' instead:  --add-data "pic:pic"
+```
+
+The result is a single self-contained binary in `dist/`. Releases are produced
+automatically by CI — pushing a version tag (e.g. `git tag v1.0.0 && git push
+--tags`) builds the `.exe` and attaches it to a new GitHub Release.
+
 ## ✅ Testing
 
 The game logic is covered by a **43-test pytest suite** that runs fully
@@ -156,7 +179,7 @@ space-invaders-pygame/
 │   ├── ui.py             # Keyboard-navigable menus, HUD, overlays
 │   └── game.py           # State machine, waves, combat, collisions
 ├── tests/                # Headless pytest suite
-├── .github/workflows/    # CI (pytest on 3.9 / 3.11 / 3.12)
+├── .github/workflows/    # CI (tests) + Release (builds the .exe)
 ├── pic/                  # Sprites, background, audio
 ├── Requirements.txt      # Runtime deps
 ├── requirements-dev.txt  # + test deps

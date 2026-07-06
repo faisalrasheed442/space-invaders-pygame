@@ -9,6 +9,11 @@ dist/
 *.egg-info/
 .eggs/
 
+# --- PyInstaller / packaging output ---
+*.spec
+app.ico
+icon256.png
+
 # --- Virtual environments ---
 .venv/
 venv/

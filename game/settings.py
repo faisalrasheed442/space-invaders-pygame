@@ -5,6 +5,7 @@ hunting through logic. Speeds are in pixels/second and durations in seconds,
 so everything is frame-rate independent.
 """
 
+import sys
 from pathlib import Path
 
 # --------------------------------------------------------------------------- #
@@ -17,10 +18,20 @@ CAPTION = "Space Adventure"
 # --------------------------------------------------------------------------- #
 # Paths
 # --------------------------------------------------------------------------- #
-ROOT_DIR = Path(__file__).resolve().parent.parent
-ASSET_DIR = ROOT_DIR / "pic"
-SAVE_FILE = ROOT_DIR / "savegame.json"
-HIGHSCORE_FILE = ROOT_DIR / "highscore.txt"
+# When packaged into a standalone .exe by PyInstaller, bundled assets live in a
+# temporary extraction dir (sys._MEIPASS), while save files must be written to a
+# stable, writable location next to the executable — not the temp dir.
+if getattr(sys, "frozen", False):
+    ASSET_ROOT = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    DATA_ROOT = Path(sys.executable).parent
+else:
+    ASSET_ROOT = Path(__file__).resolve().parent.parent
+    DATA_ROOT = ASSET_ROOT
+
+ROOT_DIR = ASSET_ROOT
+ASSET_DIR = ASSET_ROOT / "pic"
+SAVE_FILE = DATA_ROOT / "savegame.json"
+HIGHSCORE_FILE = DATA_ROOT / "highscore.txt"
 
 # --------------------------------------------------------------------------- #
 # Colors
