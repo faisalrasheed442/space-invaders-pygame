@@ -1,12 +1,13 @@
 """Tests for the player ship and its weapon-upgrade system."""
 
-from game import settings as cfg
+from game import settings as cfg, sprites
 from game.entities import Player
-from game.assets import load_frames
 
 
 def make_player():
-    return Player(load_frames("s", 9, cfg.PLAYER_SIZE))
+    frames = {lvl: sprites.make_player_frames(lvl)
+              for lvl in range(1, cfg.MAX_WEAPON_LEVEL + 1)}
+    return Player(frames)
 
 
 def test_player_starts_at_weapon_level_one():

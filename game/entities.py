@@ -63,8 +63,17 @@ class Bullet:
                 or self.x < -20 or self.x > cfg.WIDTH + 20)
 
     def draw(self, win: pygame.Surface) -> None:
-        pygame.draw.circle(win, self.color, (int(self.x), int(self.y)), self.radius)
-        pygame.draw.circle(win, cfg.WHITE, (int(self.x), int(self.y)), max(1, self.radius - 3))
+        x, y, r = int(self.x), int(self.y), self.radius
+        if self.friendly:
+            # Energy bolt: a glowing vertical capsule.
+            glow = pygame.Surface((r * 4, r * 6), pygame.SRCALPHA)
+            pygame.draw.ellipse(glow, (*self.color, 70), (0, 0, r * 4, r * 6))
+            win.blit(glow, (x - r * 2, y - r * 3))
+            pygame.draw.ellipse(win, self.color, (x - r, y - r * 2, r * 2, r * 4))
+            pygame.draw.ellipse(win, cfg.WHITE, (x - r // 2, y - r, max(1, r), r * 2))
+        else:
+            pygame.draw.circle(win, self.color, (x, y), r)
+            pygame.draw.circle(win, cfg.WHITE, (x, y), max(1, r - 3))
 
 
 # --------------------------------------------------------------------------- #
@@ -82,9 +91,11 @@ WEAPON_STREAMS = {
 
 
 class Player(AnimatedSprite):
-    def __init__(self, frames: list[pygame.Surface]):
-        super().__init__(frames)
-        self.width, self.height = frames[0].get_size()
+    def __init__(self, frames_by_level: dict[int, list[pygame.Surface]]):
+        self.frames_by_level = frames_by_level
+        base = frames_by_level[1]
+        super().__init__(base)
+        self.width, self.height = base[0].get_size()
         self.weapon_level = 1
         self.reset()
 
@@ -171,7 +182,9 @@ class Player(AnimatedSprite):
                 setattr(self, attr, max(0.0, v - dt))
 
     def draw(self, win: pygame.Surface, dt: float) -> None:
-        image = self.frame(dt, animate=self.moving)
+        # Ship art reflects the current weapon level (engines flicker always).
+        self.frames = self.frames_by_level[max(1, min(cfg.MAX_WEAPON_LEVEL, self.weapon_level))]
+        image = self.frame(dt, animate=True)
         if self.invuln > 0 and int(self.invuln * 12) % 2 == 0:
             return  # flash while invulnerable
         win.blit(image, (int(self.x), int(self.y)))
@@ -207,7 +220,9 @@ class Enemy(AnimatedSprite):
 
     @property
     def rect(self) -> pygame.Rect:
-        return pygame.Rect(int(self.x), int(self.y), self.width, self.height)
+        # Inset hitbox so near-misses don't count as collisions.
+        return pygame.Rect(int(self.x) + 9, int(self.y) + 9,
+                           self.width - 18, self.height - 18)
 
     @property
     def alive(self) -> bool:
@@ -218,10 +233,14 @@ class Enemy(AnimatedSprite):
 
     def start_dive(self, target_x: float, target_y: float) -> None:
         self.state = "diving"
+        # Aim at the player with a random horizontal offset so dives aren't
+        # perfectly predictable.
+        target_x += random.uniform(-120, 120)
         dx, dy = target_x - self.x, target_y - self.y
         dist = max(1.0, math.hypot(dx, dy))
-        self.dive_vx = cfg.DIVE_SPEED * dx / dist
-        self.dive_vy = cfg.DIVE_SPEED * abs(dy) / dist
+        speed = cfg.DIVE_SPEED * random.uniform(0.85, 1.2)
+        self.dive_vx = speed * dx / dist
+        self.dive_vy = speed * abs(dy) / dist
 
     def update_formation(self, dt: float, group_dx: float, drift: float) -> None:
         """Move as part of the formation. group_dx already includes dt."""
@@ -242,16 +261,21 @@ class Enemy(AnimatedSprite):
             return None
         self._shoot_timer -= dt
         if self._shoot_timer <= 0:
-            self._shoot_timer = random.uniform(cfg.SHOOTER_FIRE_INTERVAL * 0.6,
-                                               cfg.SHOOTER_FIRE_INTERVAL * 1.4)
+            self._shoot_timer = random.uniform(cfg.SHOOTER_FIRE_INTERVAL * 0.5,
+                                               cfg.SHOOTER_FIRE_INTERVAL * 1.5)
             px, py = player_pos
             cx = self.x + self.width / 2
             cy = self.y + self.height
-            dx = px - cx
-            dist = max(1.0, math.hypot(dx, py - cy))
-            vx = cfg.ENEMY_BULLET_SPEED * 0.5 * dx / dist
-            return Bullet(cx, cy, cfg.ENEMY_BULLET_SPEED, cfg.RED,
-                          cfg.ENEMY_BULLET_RADIUS, False, vx=vx)
+            # Randomly choose between an aimed shot and a wild spray so the
+            # player can never fully read the pattern.
+            if random.random() < 0.5:
+                dx = (px - cx) + random.uniform(-60, 60)
+                dist = max(1.0, math.hypot(dx, py - cy))
+                vx = cfg.ENEMY_BULLET_SPEED * random.uniform(0.35, 0.6) * dx / dist
+            else:
+                vx = random.uniform(-1, 1) * cfg.ENEMY_BULLET_SPEED * 0.5
+            speed = cfg.ENEMY_BULLET_SPEED * random.uniform(0.85, 1.15)
+            return Bullet(cx, cy, speed, cfg.RED, cfg.ENEMY_BULLET_RADIUS, False, vx=vx)
         return None
 
     def draw(self, win: pygame.Surface, dt: float) -> None:
@@ -310,36 +334,45 @@ class Boss:
         return self._attack_timer <= 0
 
     def do_attack(self, player_pos) -> list[Bullet]:
-        self._attack_timer = cfg.BOSS_ATTACK_INTERVAL
-        pattern = self.patterns[self._pattern_idx % len(self.patterns)]
-        self._pattern_idx += 1
+        # Random interval and random pattern each time so the boss is never
+        # predictable — the player must react, not memorise.
+        self._attack_timer = cfg.BOSS_ATTACK_INTERVAL * random.uniform(0.55, 1.25)
+        pattern = random.choice(self.patterns)
         speed = cfg.ENEMY_BULLET_SPEED
         cx = self.x + self.width / 2
         cy = self.y + self.height
         bullets: list[Bullet] = []
 
         if pattern == "spread":
-            for angle in range(-60, 61, 20):
+            base = random.uniform(-15, 15)          # random rotation of the fan
+            count = random.randint(5, 8)
+            for i in range(count):
+                angle = base - 60 + 120 * i / (count - 1)
                 rad = math.radians(angle)
-                bullets.append(Bullet(cx, cy, speed * math.cos(rad), cfg.PURPLE,
-                                      cfg.ENEMY_BULLET_RADIUS, False, vx=speed * math.sin(rad)))
+                spd = speed * random.uniform(0.9, 1.1)
+                bullets.append(Bullet(cx, cy, spd * math.cos(rad), cfg.PURPLE,
+                                      cfg.ENEMY_BULLET_RADIUS, False, vx=spd * math.sin(rad)))
         elif pattern == "aimed":
             px, py = player_pos
             dx, dy = px - cx, max(1.0, py - cy)
             dist = math.hypot(dx, dy)
-            for spread in (-0.15, 0.0, 0.15):
-                bullets.append(Bullet(cx, cy, speed * dy / dist, cfg.RED,
+            for _ in range(random.randint(2, 4)):
+                jitter = random.uniform(-0.22, 0.22)
+                spd = speed * random.uniform(0.9, 1.15)
+                bullets.append(Bullet(cx, cy, spd * dy / dist, cfg.RED,
                                       cfg.ENEMY_BULLET_RADIUS, False,
-                                      vx=speed * (dx / dist + spread)))
+                                      vx=spd * (dx / dist + jitter)))
         elif pattern == "rain":
-            for i in range(7):
-                x = self.width / 6 * i + self.x
-                bullets.append(Bullet(x, cy, speed * 0.9, cfg.BLUE,
-                                      cfg.ENEMY_BULLET_RADIUS, False))
+            for _ in range(random.randint(5, 9)):
+                x = self.x + random.uniform(0, self.width)
+                bullets.append(Bullet(x, cy, speed * random.uniform(0.75, 1.0), cfg.BLUE,
+                                      cfg.ENEMY_BULLET_RADIUS, False,
+                                      vx=random.uniform(-40, 40)))
         elif pattern == "spiral":
-            self._spiral += 0.6
-            for k in range(6):
-                rad = self._spiral + k * (math.pi / 3)
+            self._spiral += random.uniform(0.4, 0.9)
+            arms = random.randint(5, 7)
+            for k in range(arms):
+                rad = self._spiral + k * (2 * math.pi / arms)
                 bullets.append(Bullet(cx, cy, speed * math.cos(rad) * 0.7 + speed * 0.4,
                                       cfg.ORANGE, cfg.ENEMY_BULLET_RADIUS, False,
                                       vx=speed * math.sin(rad)))

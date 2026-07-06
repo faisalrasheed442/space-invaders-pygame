@@ -24,11 +24,20 @@
 
 ## ✨ Features
 
+### Procedurally generated ships
+- **Every ship is drawn from scratch in code** — no reused sprite art. Each enemy archetype has its own silhouette, and each individual enemy gets small random colour/detail variation, so a wave never looks copy-pasted.
+- **Your ship visibly upgrades** with its weapon level — more engines, wings, and cannons appear as you power up.
+
+<p align="center">
+  <img src="pic/ships.png" alt="Procedurally generated ships" width="90%">
+</p>
+
 ### Combat that fights back
 - **Enemies attack you** — "shooter" and "tank" enemies fire aimed bullets downward.
 - **Dive-bombers** — enemies break formation and dive straight at your position.
-- **Descending formation** — the whole wave drifts down over time and drops on the edges, so standing still is never safe.
-- **4 boss types**, one every 5th wave — each with its own colour, attack rotation, and health that scales with tier (see below).
+- **Unpredictable attacks** — enemy fire and boss patterns use randomised timing, trajectories, and pattern selection, so attacks can't be memorised — you have to react.
+- **Fair collisions** — you only take damage from an actual hit; dodging never costs health, and hitboxes are inset so near-misses don't count.
+- **4 boss types**, one every 5th wave — each with its own shape, colour, attack rotation, and health that scales with tier (see below).
 
 ### Upgrade your ship
 - **Weapon-upgrade system** — collect `^` upgrades to level up your guns: single → double → triple → heavy → 5-way spread. At high levels each bullet also deals **double damage**.
@@ -112,7 +121,7 @@ python main.py
 
 ## ✅ Testing
 
-The game logic is covered by a **32-test pytest suite** that runs fully
+The game logic is covered by a **39-test pytest suite** that runs fully
 headless (no window or audio needed), plus a boot smoke test — all wired into
 **GitHub Actions CI** across Python 3.9 / 3.11 / 3.12.
 
@@ -122,8 +131,9 @@ pytest
 ```
 
 The suite covers weapon upgrades, all four boss types attacking, enemy fire and
-dives, every power-up effect, wave progression, collisions, and the full
-save / continue / game-over lifecycle.
+dives, every power-up effect, wave progression, collisions (including the
+"dodging never costs health" fairness rule), distinct procedural sprites, and
+the full save / continue / game-over lifecycle.
 
 ## 🧩 Architecture
 
@@ -136,6 +146,7 @@ space-invaders-pygame/
 ├── game/
 │   ├── settings.py       # All tuning constants & colors (balance in one place)
 │   ├── assets.py         # Fault-tolerant image / sound / font loading
+│   ├── sprites.py        # Procedural ship generation (all art drawn in code)
 │   ├── savegame.py       # JSON save / continue + high-score persistence
 │   ├── entities.py       # Player, Enemy, Boss, Bullet, PowerUp, Explosion
 │   ├── ui.py             # Keyboard-navigable menus, HUD, overlays

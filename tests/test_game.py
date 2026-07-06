@@ -162,6 +162,23 @@ def test_taking_damage_costs_a_life(game):
     assert game.lives == lives - 1
 
 
+def test_dodging_a_low_enemy_never_costs_health(game):
+    """Regression: an enemy dropping low must not damage a far-away player."""
+    from game.entities import Enemy
+    game.new_game()
+    game.enemies.clear()
+    frames = game.enemy_variants["grunt"][0]
+    game.enemies.append(Enemy(frames, 20, cfg.HEIGHT - 120, "grunt", 1))  # far left, low
+    game.dive_timer = 1e9                              # disable dives for this test
+    game.player.x = cfg.WIDTH - game.player.width - 5  # hug the far-right corner
+    game.player.y = cfg.HEIGHT - game.player.height - 5
+    lives = game.lives
+    for _ in range(700):
+        game._update_enemies(1 / 60)
+        game._collide_bodies()
+    assert game.lives == lives
+
+
 def test_clearing_a_wave_advances_and_awards_bonus(game):
     game.new_game()
     game.enemies.clear()

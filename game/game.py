@@ -8,7 +8,7 @@ import random
 
 import pygame
 
-from game import assets, settings as cfg, savegame, ui
+from game import assets, settings as cfg, savegame, sprites, ui
 from game.entities import Boss, Bullet, Enemy, Explosion, Player, PowerUp
 
 
@@ -31,20 +31,18 @@ class Game:
     def __init__(self) -> None:
         self.win = pygame.display.set_mode((cfg.WIDTH, cfg.HEIGHT))
         pygame.display.set_caption(cfg.CAPTION)
-        pygame.display.set_icon(assets.load_image("icon.png", (32, 32)))
+        pygame.display.set_icon(sprites.make_icon())
 
-        # --- assets ---
+        # --- procedurally generated ship art ---
+        self.player_frames = {lvl: sprites.make_player_frames(lvl)
+                              for lvl in range(1, cfg.MAX_WEAPON_LEVEL + 1)}
+        self.ship_icon = pygame.transform.smoothscale(self.player_frames[1][0], (28, 28))
+        self.enemy_variants = {kind: sprites.make_enemy_variants(kind, 5)
+                               for kind in cfg.ENEMY_KINDS}
+        self.boss_images = {kind: sprites.make_boss(kind) for kind in cfg.BOSS_SPECS}
+
+        # --- other assets ---
         self.bg = assets.load_image("bg.jpg", (cfg.WIDTH, cfg.HEIGHT))
-        self.ship_frames = assets.load_frames("s", 9, cfg.PLAYER_SIZE)
-        self.ship_icon = pygame.transform.smoothscale(self.ship_frames[0], (28, 28))
-        self.enemy_frames = {
-            kind: assets.load_frames("e", 9, cfg.ENEMY_SIZE, spec["tint"])
-            for kind, spec in cfg.ENEMY_KINDS.items()
-        }
-        self.boss_images = {
-            kind: assets.load_image("e1.png", cfg.BOSS_SIZE, tint=spec["tint"])
-            for kind, spec in cfg.BOSS_SPECS.items()
-        }
         self.fire_sound = assets.load_sound("fire.wav")
         self.hit_sound = assets.load_sound("hit.wav")
         self._music_ok = assets.load_music("bgg.mp3")
@@ -60,7 +58,7 @@ class Game:
         self.muted = False
         self.high_score = savegame.read_highscore()
 
-        self.player = Player(self.ship_frames)
+        self.player = Player(self.player_frames)
         self.main_menu = ui.Menu(self._main_menu_items())
         self.pause_menu = ui.Menu([("resume", "Resume"),
                                    ("save_quit", "Save & Quit to Menu"),
@@ -144,7 +142,8 @@ class Game:
                 x = margin + c * gap_x
                 y = 70 + r * 84
                 kind = self._pick_kind(r)
-                self.enemies.append(Enemy(self.enemy_frames[kind], x, y, kind, self.wave))
+                frames = random.choice(self.enemy_variants[kind])
+                self.enemies.append(Enemy(frames, x, y, kind, self.wave))
                 placed += 1
 
     def _pick_kind(self, row: int) -> str:
@@ -319,11 +318,13 @@ class Game:
             bullet = e.maybe_shoot(dt, player_pos)
             if bullet:
                 self.enemy_bullets.append(bullet)
-            # Breached the floor line -> costs the player a life.
-            if e.y + e.height >= cfg.ENEMY_FLOOR:
-                self.enemies.remove(e)
-                self.explosions.append(Explosion(e.x + e.width / 2, e.y + e.height / 2, cfg.RED))
-                self._damage_player()
+            # If an enemy drifts off the bottom it simply re-enters from the top
+            # (no free damage to the player) so waves are cleared by shooting,
+            # not by waiting them out — and dodging never costs health.
+            if e.y > cfg.HEIGHT:
+                e.state = "formation"
+                e.y = -e.height
+                e.home_x = e.x = random.uniform(20, cfg.WIDTH - e.width - 20)
 
         # Trigger dive-bombs.
         self.dive_timer -= dt
@@ -343,7 +344,8 @@ class Game:
             self.enemy_bullets.extend(self.boss.do_attack(player_pos))
         if self.boss.ready_spawn() and len(self.enemies) < 6:
             x = random.randint(120, cfg.WIDTH - 200)
-            self.enemies.append(Enemy(self.enemy_frames["shooter"], x, 150, "shooter", self.wave))
+            frames = random.choice(self.enemy_variants["shooter"])
+            self.enemies.append(Enemy(frames, x, 150, "shooter", self.wave))
 
     def _update_powerups(self, dt: float) -> None:
         for p in self.powerups[:]:
