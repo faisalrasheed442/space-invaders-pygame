@@ -24,9 +24,11 @@ DefaultDirName={autopf}\SpaceAdventure
 DefaultGroupName=Space Adventure
 DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\{#MyAppExeName}
-OutputDir=installer_output
+; Paths are relative to this script's dir (installer/), so reach up to the repo
+; root where the build output and generated icon live.
+OutputDir=..\installer_output
 OutputBaseFilename=SpaceAdventureSetup
-SetupIconFile=app.ico
+SetupIconFile=..\app.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -43,7 +45,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional icons:"
 
 [Files]
-Source: "dist\SpaceAdventure\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "..\dist\SpaceAdventure\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
 Name: "{group}\Space Adventure"; Filename: "{app}\{#MyAppExeName}"
