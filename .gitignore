@@ -13,6 +13,8 @@ dist/
 *.spec
 app.ico
 icon256.png
+installer_output/
+SpaceAdventure-portable-*.zip
 
 # --- Virtual environments ---
 .venv/

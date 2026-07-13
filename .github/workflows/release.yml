@@ -1,18 +1,20 @@
 name: Build & Release
 
-# Builds a standalone Windows .exe. Pushing a version tag (e.g. v1.0.0)
-# publishes it as a downloadable GitHub Release asset. A manual run just
-# uploads the .exe as a workflow artifact for testing.
+# Version-driven releases. The version in game/version.py is the single source
+# of truth: on push to main, CI reads it, and if a release for that version does
+# not already exist, it builds the installer and publishes it. Ordinary commits
+# that don't bump the version do nothing (idempotent). Publishing uses the
+# built-in GITHUB_TOKEN — no personal token needed, since this repo is public.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: write        # required to create/update Releases
+  contents: write
 
 jobs:
-  build-windows:
+  release:
     runs-on: windows-latest
 
     steps:
@@ -21,14 +23,42 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
+
+      - name: Read version (single source of truth)
+        id: ver
+        shell: bash
+        run: echo "version=$(python -c "from game.version import VERSION; print(VERSION)")" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if this release already exists (idempotency gate)
+        id: gate
+        shell: bash
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/v${{ steps.ver.outputs.version }}")
+          if [ "$code" = "200" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release v${{ steps.ver.outputs.version }} already exists — skipping build."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Install dependencies
+        if: steps.gate.outputs.exists == 'false'
         run: |
           python -m pip install --upgrade pip
-          pip install -r Requirements.txt pyinstaller pillow
+          pip install -r requirements-dev.txt pyinstaller pillow
+
+      - name: Run tests
+        if: steps.gate.outputs.exists == 'false'
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+        run: python -m pytest -q
 
       - name: Generate application icon
+        if: steps.gate.outputs.exists == 'false'
         env:
           SDL_VIDEODRIVER: dummy
           SDL_AUDIODRIVER: dummy
@@ -36,31 +66,42 @@ jobs:
           python -c "import pygame; pygame.init(); from game import sprites; img=pygame.transform.smoothscale(sprites.make_player_frames(5)[0],(256,256)); pygame.image.save(img,'icon256.png')"
           python -c "from PIL import Image; Image.open('icon256.png').save('app.ico', sizes=[(256,256),(128,128),(64,64),(48,48),(32,32),(16,16)])"
 
-      - name: Build standalone EXE
+      - name: Build onedir app (PyInstaller)
+        if: steps.gate.outputs.exists == 'false'
         run: >
-          pyinstaller --onefile --windowed
+          pyinstaller --noconfirm --windowed
           --name SpaceAdventure
           --icon app.ico
           --add-data "pic;pic"
           main.py
 
-      - name: Smoke-test the built EXE
+      - name: Smoke-test the built app
+        if: steps.gate.outputs.exists == 'false'
         env:
           SDL_VIDEODRIVER: dummy
           SDL_AUDIODRIVER: dummy
           SELFTEST_FRAMES: "60"
-        run: ./dist/SpaceAdventure.exe
+        run: ./dist/SpaceAdventure/SpaceAdventure.exe
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: SpaceAdventure-windows
-          path: dist/SpaceAdventure.exe
+      - name: Build installer (Inno Setup)
+        if: steps.gate.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.version }} installer\SpaceAdventure.iss
 
-      - name: Publish to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Package portable build (zip)
+        if: steps.gate.outputs.exists == 'false'
+        shell: pwsh
+        run: Compress-Archive -Path dist/SpaceAdventure/* -DestinationPath SpaceAdventure-portable-win64.zip -Force
+
+      - name: Publish GitHub Release
+        if: steps.gate.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/SpaceAdventure.exe
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: Space Adventure v${{ steps.ver.outputs.version }}
           generate_release_notes: true
-          name: Space Adventure ${{ github.ref_name }}
+          files: |
+            installer_output/SpaceAdventureSetup.exe
+            SpaceAdventure-portable-win64.zip

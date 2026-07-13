@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/faisalrasheed442/space-invaders-pygame/releases/latest"><b>⬇️ Download the Windows game (.exe)</b></a>
+  <a href="https://github.com/faisalrasheed442/space-invaders-pygame/releases/latest"><b>⬇️ Download &amp; install for Windows</b></a>
 </p>
 
 <p align="center">
@@ -126,28 +126,52 @@ pip install -r Requirements.txt
 python main.py
 ```
 
-### Download the standalone game (no Python needed)
+### Download & install (no Python needed)
 
-Prebuilt Windows executables are published on the
+Grab the latest build from the
 [**Releases**](https://github.com/faisalrasheed442/space-invaders-pygame/releases/latest)
-page — download `SpaceAdventure.exe` and double-click to play.
+page:
 
-### Build your own executable
+- **`SpaceAdventureSetup.exe`** — a proper Windows installer (installs to Program
+  Files, adds Start Menu + Desktop shortcuts and an uninstaller). Recommended.
+- **`SpaceAdventure-portable-win64.zip`** — unzip and run `SpaceAdventure.exe`, no
+  install.
+
+**Auto-updates:** the installed app checks the public Releases API on startup and,
+when a newer version is available, offers a one-click update — it downloads the new
+installer (verified by size + executable-magic before it's ever run), installs it
+silently, and relaunches. No account or token is involved; it only reads a public
+API.
+
+### How releases are built
+
+Releases are **version-driven and fully automated**. The version in
+[`game/version.py`](game/version.py) is the single source of truth. Bump it and push:
+
+```bash
+# edit VERSION in game/version.py, then
+git commit -am "v1.2.0: what changed" && git push
+```
+
+CI reads the version, and if that release doesn't already exist it runs the tests,
+builds the app with **PyInstaller (onedir** — no one-file DLL-extraction race),
+packages it into the installer with **Inno Setup**, and publishes both the installer
+and the portable zip to a new GitHub Release. Commits that don't change the version
+are a no-op (idempotent). Publishing uses the built-in `GITHUB_TOKEN` — no secrets
+needed, since the repo is public.
+
+### Build locally
 
 ```bash
 pip install pyinstaller
 # Windows (note the ';' between source and dest):
-pyinstaller --onefile --windowed --name SpaceAdventure --add-data "pic;pic" main.py
-# macOS / Linux use ':' instead:  --add-data "pic:pic"
+pyinstaller --noconfirm --windowed --name SpaceAdventure --add-data "pic;pic" main.py
+# -> dist/SpaceAdventure/  (run SpaceAdventure.exe)
 ```
-
-The result is a single self-contained binary in `dist/`. Releases are produced
-automatically by CI — pushing a version tag (e.g. `git tag v1.0.0 && git push
---tags`) builds the `.exe` and attaches it to a new GitHub Release.
 
 ## ✅ Testing
 
-The game logic is covered by a **43-test pytest suite** that runs fully
+The game logic is covered by a **54-test pytest suite** that runs fully
 headless (no window or audio needed), plus a boot smoke test — all wired into
 **GitHub Actions CI** on Python 3.11.
 
@@ -170,16 +194,19 @@ responsibility:
 space-invaders-pygame/
 ├── main.py               # Thin entry point
 ├── game/
+│   ├── version.py        # Single source of truth for the app version
 │   ├── settings.py       # All tuning constants & colors (balance in one place)
 │   ├── assets.py         # Fault-tolerant image / sound / font loading
 │   ├── sprites.py        # Procedural ship generation (all art drawn in code)
 │   ├── background.py     # Animated parallax starfield + nebula
 │   ├── savegame.py       # JSON save / continue + high-score persistence
+│   ├── updater.py        # In-app self-update (public API, integrity-gated)
 │   ├── entities.py       # Player, Enemy, Boss, Bullet, PowerUp, Explosion
 │   ├── ui.py             # Keyboard-navigable menus, HUD, overlays
 │   └── game.py           # State machine, waves, combat, collisions
+├── installer/            # Inno Setup script (builds the Windows installer)
 ├── tests/                # Headless pytest suite
-├── .github/workflows/    # CI (tests) + Release (builds the .exe)
+├── .github/workflows/    # CI (tests) + Release (installer + self-update)
 ├── pic/                  # Sprites, background, audio
 ├── Requirements.txt      # Runtime deps
 ├── requirements-dev.txt  # + test deps

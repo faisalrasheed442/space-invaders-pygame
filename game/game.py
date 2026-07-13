@@ -5,10 +5,11 @@ from __future__ import annotations
 import math
 import os
 import random
+import threading
 
 import pygame
 
-from game import assets, settings as cfg, savegame, sprites, ui
+from game import assets, settings as cfg, savegame, sprites, ui, updater
 from game.background import Background
 from game.entities import Boss, Bullet, Enemy, Explosion, Player, PowerUp
 
@@ -69,6 +70,45 @@ class Game:
                                   ("quit", "Quit Game")])
         self.state = MENU
         self._init_run_state()
+
+        # Self-update (installed Windows builds only; no-op elsewhere).
+        self._quit_requested = False
+        self.update_info = None
+        self._update_msg = None
+        self._start_update_check()
+
+    # ------------------------------------------------------------------ #
+    # Self-update
+    # ------------------------------------------------------------------ #
+    def _start_update_check(self) -> None:
+        if not updater.is_supported():
+            return
+
+        def worker():
+            info = updater.check_for_update()
+            if info:
+                self.update_info = info
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _do_update(self) -> None:
+        info = self.update_info
+        if not info or self._update_msg:
+            return
+        self._update_msg = f"Downloading v{info['version']}..."
+
+        def worker():
+            try:
+                path = updater.download(info)
+                self._update_msg = "Installing update..."
+                if updater.apply_update(path):
+                    self._quit_requested = True   # let installer swap files
+                else:
+                    self._update_msg = "Update cancelled."
+            except Exception:
+                self._update_msg = "Update failed - try again later."
+
+        threading.Thread(target=worker, daemon=True).start()
 
     # ------------------------------------------------------------------ #
     # Run / wave setup
@@ -201,7 +241,9 @@ class Game:
                 self._toggle_mute()
 
             if self.state == MENU:
-                if not self._menu_input(self.main_menu, event):
+                if event.key == pygame.K_u and self.update_info:
+                    self._do_update()
+                elif not self._menu_input(self.main_menu, event):
                     return False
             elif self.state == PLAYING:
                 if event.key in (pygame.K_p, pygame.K_ESCAPE):
@@ -498,6 +540,13 @@ class Game:
         ui.draw_center_text(self.win,
                             "Arrows/WASD move   Space shoot   P pause   M mute   Enter select",
                             self.f_tiny, cfg.GREY, cx, 660)
+        # Self-update notice (installed builds only).
+        if self._update_msg:
+            ui.draw_center_text(self.win, self._update_msg, self.f_small, cfg.CYAN, cx, 615)
+        elif self.update_info:
+            ui.draw_center_text(self.win,
+                                f"Update available: v{self.update_info['version']} - press U to install",
+                                self.f_small, cfg.GREEN, cx, 615)
 
     def _draw_world(self, dt: float) -> None:
         for e in self.enemies:
@@ -542,6 +591,8 @@ class Game:
         while running:
             dt = min(self.clock.tick(cfg.FPS) / 1000.0, 0.05)
             running = self.handle_events()
+            if self._quit_requested:      # self-update is installing; exit so it can swap files
+                running = False
             if self.state == PLAYING:
                 self.update(dt)
             self.draw(dt)
